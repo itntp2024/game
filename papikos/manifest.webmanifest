@@ -1,0 +1,17 @@
+{
+  "name": "Papi Kos Simulator",
+  "short_name": "Papi Kos",
+  "description": "Jadi juragan kos-kosan: terima penghuni, hadapi drama penghuni & buka warung.",
+  "lang": "id",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#02756A",
+  "theme_color": "#1F5C4A",
+  "icons": [
+    { "src": "papikos-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "papikos-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "papikos-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
