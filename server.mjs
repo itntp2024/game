@@ -122,7 +122,7 @@ function serveFile(req, res, filePath) {
   });
 }
 
-const memory = { save: null, saveMeta: null, receipts: [], wallet: { paid: 1_000_000_000_000, free: 1_000_000_000_000 }, juragan: true };
+const memory = { save: null, saveMeta: null, receipts: [], wallet: { paid: 100_000, free: 0 }, juragan: true };
 
 async function handleApi(req, res, url) {
   const p = url.pathname;
@@ -178,6 +178,8 @@ async function handleApi(req, res, url) {
   if (p === '/api/local/grant' && m === 'POST') {
     const body = await readBody(req);
     if (typeof body.cash === 'number') memory.grantCash = (memory.grantCash || 0) + body.cash;
+    if (typeof body.setPaid === 'number') memory.wallet.paid = Math.max(0, Math.floor(body.setPaid));
+    if (typeof body.setFree === 'number') memory.wallet.free = Math.max(0, Math.floor(body.setFree));
     if (typeof body.paid === 'number') memory.wallet.paid += body.paid;
     if (typeof body.free === 'number') memory.wallet.free += body.free;
     return sendJson(res, 200, { ok: true, wallet: { ...memory.wallet }, grantCash: memory.grantCash || 0 });
