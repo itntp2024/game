@@ -11,7 +11,7 @@
 // Darurat: ganti isi file ini dengan versi yang hanya memanggil self.registration.unregister(); browser
 // memeriksa file ini setiap halaman dibuka, jadi service worker lama akan lepas sendiri.
 
-const VERSION = 'v11'
+const VERSION = 'v13'
 const SHELL = `papikos-shell-${VERSION}`
 const ASSETS = `papikos-assets-${VERSION}`
 const KEEP = [SHELL, ASSETS]
@@ -19,8 +19,24 @@ const KEEP = [SHELL, ASSETS]
 const MAX_ASSETS = 160
 /** Server tidak menjawab selama ini → pakai halaman simpanan (kalau ada). */
 const NAV_TIMEOUT_MS = 8000
-/** Semua file assets/ build ini (diisi saat build), disimpan saat pemasangan supaya menu yang belum pernah dibuka pun jalan offline. */
-const PRECACHE = ["assets/AccountBox-9db2FSoN.js","assets/AdminApp-BEwv7_3P.js","assets/Angkringan-DTaWfeoU.js","assets/App-CU_U9YpB.js","assets/App-DNo8DZNp.css","assets/Bakpia-BwZwckh8.js","assets/Batik-DxW6mdEr.js","assets/Becak-CgtHOxi3.js","assets/CanvasRenderer-C_hk2Cqo.js","assets/Filter-LkBJeSeY.js","assets/KopiJoss-Dst2vFIx.js","assets/MinigameHost-Dnj638Ud.js","assets/RenderTargetSystem-ClYAs3HF.js","assets/WebGLRenderer-BzCHGUZ1.js","assets/WebGPURenderer-lO2cKJC5.js","assets/activeKos-BKJUVzJ_.js","assets/admin-Y1nBJx_i.css","assets/audio-CmDrIjpi.js","assets/browserAll-cyeEFaS_.js","assets/cloud-6E2ijBN7.js","assets/friends-jWu9jMe9.js","assets/getTexelRangeRects-C6WWANWu.js","assets/index-CUGIV6CL.css","assets/index-SvUl-92j.js","assets/pwa-DF7ombOa.js","assets/ref-BxFHwI13.js","assets/sfx-CX5SepZI.js","assets/store-SGl8bGnM.js","assets/sync-BbbZPr_5.js","assets/useSmoothT-DlEsILuh.js","assets/version-ptysXaZq.js","assets/wallet-B3rhit0H.js","assets/webworkerAll-CTSmEGw5.js"]
+/**
+ * Hanya aset inti untuk boot/layar awal. Sisanya di-cache on-demand oleh handler asset saat pertama dipakai,
+ * supaya pemasangan SW tidak mengunduh puluhan chunk besar sekaligus (yang bikin load awal/update terasa berat).
+ */
+const PRECACHE = [
+  "assets/index-SvUl-92jv2.js",
+  "assets/index-CUGIV6CLv2.css",
+  "assets/App-CU_U9YpBv2.js",
+  "assets/App-DNo8DZNpv2.css",
+  "assets/activeKos-BKJUVzJ_v2.js",
+  "assets/store-SGl8bGnMv2.js",
+  "assets/wallet-B3rhit0Hv2.js",
+  "assets/pwa-DF7ombOav2.js",
+  "assets/version-ptysXaZqv2.js",
+  "assets/cloud-6E2ijBN7v2.js",
+  "assets/ref-BxFHwI13v2.js",
+  "assets/sfx-CX5SepZIv2.js",
+]
 
 const scope = () => new URL(self.registration ? self.registration.scope : self.location.href)
 
@@ -78,32 +94,35 @@ async function page(request) {
   })
 }
 
-/** File ber-hash: isinya tetap, jadi simpanan dulu. */
+/** Asset: network-first agar patch in-place di nama file yang sama tidak terjebak cache lama. */
 async function asset(request) {
   const cache = await caches.open(ASSETS)
-  const hit = await cache.match(request)
-  if (hit) return hit
-  const res = await fetch(request)
-  if (res.ok && res.type === 'basic') {
-    await cache.put(request, res.clone())
-    void trim(cache)
+  try {
+    const res = await fetch(request)
+    if (res.ok && res.type === 'basic') {
+      await cache.put(request, res.clone())
+      void trim(cache)
+    }
+    return res
+  } catch {
+    const hit = await cache.match(request)
+    if (hit) return hit
+    throw new Error('offline')
   }
-  return res
 }
 
-/** Ikon, sprite, manifest: simpanan dulu (cepat), diperbarui di belakang. */
+/** Ikon, sprite, manifest: network-first, fallback ke cache. */
 async function staticFile(event) {
   const cache = await caches.open(SHELL)
-  const hit = await cache.match(event.request)
-  const network = fetch(event.request).then((res) => {
-    if (res.ok && res.type === 'basic') void cache.put(event.request, res.clone())
+  try {
+    const res = await fetch(event.request)
+    if (res.ok && res.type === 'basic') await cache.put(event.request, res.clone())
     return res
-  })
-  if (hit) {
-    event.waitUntil(network.catch(() => undefined))
-    return hit
+  } catch {
+    const hit = await cache.match(event.request)
+    if (hit) return hit
+    return fetch(event.request)
   }
-  return network
 }
 
 self.addEventListener('install', (event) => {

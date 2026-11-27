@@ -18,10 +18,14 @@
     <meta name="application-name" content="Papi Kos" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bungee&family=IBM+Plex+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link
       href="https://fonts.googleapis.com/css2?family=Bungee&family=IBM+Plex+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=IBM+Plex+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" /></noscript>
     <meta name="theme-color" content="#1F5C4A" />
     <!-- game ini hanya bertema terang: cegah mode gelap otomatis browser/WebView (Samsung, Threads, IG) mengubah warna -->
     <meta name="color-scheme" content="only light" />
@@ -32,6 +36,8 @@
       @keyframes papikos-creep { 0% { transform: translateX(-100.0%); } 5% { transform: translateX(-80.1%); } 10% { transform: translateX(-64.6%); } 15% { transform: translateX(-52.5%); } 20% { transform: translateX(-43.1%); } 25% { transform: translateX(-35.8%); } 30% { transform: translateX(-30.1%); } 35% { transform: translateX(-25.6%); } 40% { transform: translateX(-22.2%); } 45% { transform: translateX(-19.5%); } 50% { transform: translateX(-17.4%); } 55% { transform: translateX(-15.8%); } 60% { transform: translateX(-14.5%); } 65% { transform: translateX(-13.5%); } 70% { transform: translateX(-12.7%); } 75% { transform: translateX(-12.1%); } 80% { transform: translateX(-11.6%); } 85% { transform: translateX(-11.3%); } 90% { transform: translateX(-11.0%); } 95% { transform: translateX(-10.8%); } 100% { transform: translateX(-10.6%); } }
       .papikos-creep { width: 100%; transform: translateX(-100%); animation: papikos-creep 30s linear forwards; will-change: transform; }
       @media (prefers-reduced-motion: reduce) { .papikos-creep { animation: none; transform: translateX(-50%); } }
+      /* Base icon slot: stabilkan layout sebelum mask ikon per-karakter dimuat. */
+      [data-pk-i]{display:inline-flex;align-items:center;justify-content:center;vertical-align:-0.125em;width:1em;height:1em;line-height:1;flex-shrink:0;color:inherit;background-color:transparent;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain;overflow:hidden;speak:never;user-select:none;font-style:normal}
     </style>
     <title>Papi Kos Simulator</title>
     <meta name="description" content="Jadi juragan kos-kosan: terima penghuni, hadapi pungli, drama penghuni & buka warung. Main gratis di browser." />
@@ -49,10 +55,26 @@
     <meta name="twitter:title" content="Papi Kos Simulator — jadi juragan kos-kosan" />
     <meta name="twitter:description" content="Terima penghuni, hadapi pungli, drama penghuni & buka warung. Main gratis!" />
     <meta name="twitter:image" content="https://play.mahbar.id/papikos/og-banner.png?v=3" />
-    <link rel="stylesheet" crossorigin href="/papikos/assets/pk-icons.css">
-    <script src="/papikos/assets/pk-icons.js"></script>
-<script type="module" crossorigin src="/papikos/assets/index-SvUl-92j.js"></script>
-    <link rel="stylesheet" crossorigin href="/papikos/assets/index-CUGIV6CL.css">
+    <link rel="preload" as="style" href="/papikos/assets/pk-icons-v13.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" crossorigin href="/papikos/assets/pk-icons-v13.css"></noscript>
+    <link rel="modulepreload" crossorigin href="/papikos/assets/App-CU_U9YpBv2.js">
+    <link rel="modulepreload" crossorigin href="/papikos/assets/activeKos-BKJUVzJ_v2.js">
+    <link rel="modulepreload" crossorigin href="/papikos/assets/store-SGl8bGnMv2.js">
+    <link rel="modulepreload" crossorigin href="/papikos/assets/wallet-B3rhit0Hv2.js">
+    <script type="module" crossorigin src="/papikos/assets/index-SvUl-92jv2.js"></script>
+    <script>
+      (function(){
+        function load(){
+          var s=document.createElement('script');
+          s.src='/papikos/assets/pk-icons-v13.js';
+          s.defer=true;
+          document.head.appendChild(s);
+        }
+        if('requestIdleCallback' in window) requestIdleCallback(load,{timeout:2500});
+        else setTimeout(load,1200);
+      })();
+    </script>
+    <link rel="stylesheet" crossorigin href="/papikos/assets/index-CUGIV6CLv2.css">
   </head>
   <body>
     <!-- splash sebelum kode game dimuat; diganti LoadingSplash (src/ui/components/LoadingSplash.tsx) -->

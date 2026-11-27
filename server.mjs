@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -77,13 +78,47 @@ function safeJoin(base, reqPath) {
   return full;
 }
 
-function serveFile(res, filePath) {
+const fileCache = new Map();
+
+function serveFile(req, res, filePath) {
+  const started = Date.now();
   fs.stat(filePath, (err, st) => {
     if (err || !st.isFile()) return notFound(res);
     const ext = path.extname(filePath).toLowerCase();
     const type = MIME[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': 'no-store' });
-    fs.createReadStream(filePath).pipe(res);
+    const compressible = /^(text\/|application\/(javascript|json|manifest\+json|wasm|xml)|image\/svg\+xml|font\/(ttf|otf))/.test(type);
+    const accept = String(req.headers['accept-encoding'] || '');
+    const base = path.basename(filePath);
+    const noStore = ext === '.html' || base === 'sw.js' || base === 'version.json';
+    // Hashed build assets are often patched in-place in this repo, so do not make them immutable.
+    // no-cache + ETag keeps them fresh while allowing cheap 304 revalidation.
+    const cacheControl = noStore ? 'no-cache' : 'no-cache';
+    const etag = `W/"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
+    const inm = String(req.headers['if-none-match'] || '');
+    if (inm && inm === etag) {
+      res.writeHead(304, { 'ETag': etag, 'Cache-Control': cacheControl, 'Vary': 'Accept-Encoding' });
+      console.log(`[static] 304 ${Date.now() - started}ms ${path.relative(ROOT, filePath)}`);
+      return res.end();
+    }
+    const canGzip = compressible && st.size > 1024 && accept.includes('gzip');
+    const key = filePath;
+    let cached = fileCache.get(key);
+    if (!cached || cached.mtimeMs !== st.mtimeMs || cached.size !== st.size) {
+      const raw = fs.readFileSync(filePath);
+      const gz = compressible && st.size > 1024 ? zlib.gzipSync(raw, { level: 6 }) : null;
+      cached = { mtimeMs: st.mtimeMs, size: st.size, raw, gz };
+      fileCache.set(key, cached);
+    }
+    if (canGzip && cached.gz) {
+      res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding', 'Content-Length': cached.gz.length, 'Cache-Control': cacheControl, 'ETag': etag });
+      console.log(`[static] 200 gzip ${cached.gz.length}B ${Date.now() - started}ms ${path.relative(ROOT, filePath)}`);
+      return res.end(cached.gz);
+    }
+    const headers = { 'Content-Type': type, 'Content-Length': cached.raw.length, 'Cache-Control': cacheControl, 'ETag': etag };
+    if (compressible) headers['Vary'] = 'Accept-Encoding';
+    res.writeHead(200, headers);
+    console.log(`[static] 200 raw ${cached.raw.length}B ${Date.now() - started}ms ${path.relative(ROOT, filePath)}`);
+    res.end(cached.raw);
   });
 }
 
@@ -175,6 +210,14 @@ async function handleApi(req, res, url) {
       memory.receipts.push(r);
       return sendJson(res, 200, { ok: true, wallet: { ...memory.wallet }, receipt: r });
     }
+    if (item === 'speedupAll') {
+      const targets = Array.isArray(args?.targets) ? args.targets : [];
+      if (!targets.length) return sendJson(res, 400, { error: 'Tidak ada pembangunan aktif.' });
+      if (!spend(args?.diamonds)) return sendJson(res, 400, { error: 'Diamond tidak cukup.' });
+      const r = receipt({ item: 'speedupAll', targets });
+      memory.receipts.push(r);
+      return sendJson(res, 200, { ok: true, wallet: { ...memory.wallet }, receipt: r });
+    }
     if (item === 'topUpFor') {
       if (!spend(args?.diamonds)) return sendJson(res, 400, { error: 'Diamond tidak cukup.' });
       const r = receipt({ item: 'topUpFor', action: args?.action, cash: Number(args?.cash || 0), diamonds: Number(args?.diamonds || 0) });
@@ -203,14 +246,27 @@ async function handleApi(req, res, url) {
     if (item === 'bigBuy') {
       const action = args?.action;
       const cash = Number(args?.cash || 0);
+      const diamonds = Math.max(0, Math.floor(Number(args?.diamonds || 0)));
       if (!action) return sendJson(res, 400, { error: 'Aksi tidak valid.' });
-      const r = receipt({ item: 'topUpFor', action, cash, diamonds: 0 });
+      if (diamonds > 0 && !spend(diamonds)) return sendJson(res, 400, { error: 'Diamond tidak cukup.' });
+      const r = receipt({ item: 'topUpFor', action, cash, diamonds });
+      memory.receipts.push(r);
+      return sendJson(res, 200, { ok: true, wallet: { ...memory.wallet }, receipt: r });
+    }
+    if (item === 'exchange') {
+      const diamonds = Math.max(0, Math.floor(Number(args?.diamonds || 0)));
+      if (!diamonds) return sendJson(res, 400, { error: 'Jumlah diamond tidak valid.' });
+      if (diamonds > 500000) return sendJson(res, 400, { error: 'Maksimal 500000 diamond sekali tukar.' });
+      if (!spend(diamonds)) return sendJson(res, 400, { error: 'Diamond tidak cukup.' });
+      const exBonus = diamonds>=500000?1.5:diamonds>=200000?1:diamonds>=50000?0.5:diamonds>=10000?0.35:diamonds>=2000?0.2:diamonds>=500?0.1:diamonds>=100?0.05:0;
+      const cash = Math.round(diamonds * 100000 * (1 + exBonus));
+      const r = receipt({ item: 'cash', cash, diamonds, note: 'Tukar diamond' });
       memory.receipts.push(r);
       return sendJson(res, 200, { ok: true, wallet: { ...memory.wallet }, receipt: r });
     }
     const SIMPLE_GEM_ITEMS = {
       applicants: 30, fillRooms: 50, rentBoost: 100, moodFull: 30, fixAll: 30,
-      vvip: 80, rivalShield: 60, rename: 250, kos3: 1000,
+      vvip: 80, rivalShield: 60, rename: 250, kos3: 1000, buyExp: 60, expBig: 250,
     };
     if (Object.prototype.hasOwnProperty.call(SIMPLE_GEM_ITEMS, item)) {
       const price = SIMPLE_GEM_ITEMS[item];
@@ -406,8 +462,8 @@ const server = http.createServer(async (req, res) => {
       const filePath = safeJoin(ROOT, rel);
       if (!filePath) return notFound(res);
       fs.stat(filePath, (err, st) => {
-        if (!err && st.isFile()) return serveFile(res, filePath);
-        if (!isAssetPath(rel)) return serveFile(res, path.join(ROOT, 'index.html'));
+        if (!err && st.isFile()) return serveFile(req, res, filePath);
+        if (!isAssetPath(rel)) return serveFile(req, res, path.join(ROOT, 'index.html'));
         return notFound(res);
       });
       return;
@@ -416,7 +472,7 @@ const server = http.createServer(async (req, res) => {
     if (p.startsWith('/assets/')) {
       const filePath = safeJoin(ROOT, p);
       if (!filePath) return notFound(res);
-      return serveFile(res, filePath);
+      return serveFile(req, res, filePath);
     }
 
     return notFound(res);
