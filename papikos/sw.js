@@ -11,7 +11,7 @@
 // Darurat: ganti isi file ini dengan versi yang hanya memanggil self.registration.unregister(); browser
 // memeriksa file ini setiap halaman dibuka, jadi service worker lama akan lepas sendiri.
 
-const VERSION = 'v13'
+const VERSION = 'v12'
 const SHELL = `papikos-shell-${VERSION}`
 const ASSETS = `papikos-assets-${VERSION}`
 const KEEP = [SHELL, ASSETS]
